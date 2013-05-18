@@ -5,8 +5,9 @@ import time, sys
 
 
 args = ["wbm", "10","p"]
-for n in range(1,11):
+for n in range(1,21):
 	args[1] = str(n * 100)
+	print "size: " + str(n * 100)
 	start_time = time.time()
 	call(args)
 	print "execution took ",time.time() - start_time, "seconds"

@@ -14,6 +14,7 @@ var blk []block.Block
 var xi_bar, xa_bar []float64
 var xab_aux, xib_aux [][]float64
 var rho float64 = 1.0
+var step_count = 500
 
 func main() {
 	p_flag := false
@@ -63,7 +64,7 @@ func main() {
 		fmt.Printf("maximum %d CPUs used\n", runtime.NumCPU())
 		admm_parallel()
 	} else {
-		fmt.Printf("serial mode")
+		fmt.Println("serial mode")
 		admm_serial()
 	}
 
@@ -72,7 +73,8 @@ func main() {
 		obj += xa_bar[i] + xi_bar[i]
 	}
 	target_obj := float64(N * (N - 1.0) / 2.0)
-	fmt.Printf("Objective : %f, Target: %f\n", obj, target_obj)
+	err := math.Abs((obj-target_obj)/target_obj)
+	fmt.Printf("Objective : %f, Target: %f, Error: %f\n", obj, target_obj, err)
 }
 
 func average() {
@@ -120,7 +122,7 @@ func admm_parallel_help(i int, ch chan int) {
 
 func admm_parallel() {
 	ch := make(chan int, N)
-	for t := 0; t < 1000; t++ {
+	for t := 0; t < step_count; t++ {
 		for i := 0; i < N; i++ {
 			go admm_parallel_help(i, ch)
 		}
@@ -132,7 +134,7 @@ func admm_parallel() {
 }
 
 func admm_serial() {
-	for t := 0; t < 1000; t++ {
+	for t := 0; t < step_count; t++ {
 		dual_update(0, N)
 		project_all(0, N, 0)
 		average()
