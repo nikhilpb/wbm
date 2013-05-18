@@ -3,24 +3,43 @@ package main
 import (
 	"fmt"
 	"github.com/nikhilpb/wbm/block"
+  "math"
+  "os"
+  "strconv"
+  "runtime"
 )
 
 var N int = 10
 var blk []block.Block
 var xi_bar, xa_bar []float64
 var xab_aux, xib_aux [][]float64
-var n_threads = N
 var rho float64 = 1.0
 
 func main() {
-	// initialize w
+  p_flag := false
+
+  runtime.GOMAXPROCS(runtime.NumCPU())
+  if len(os.Args) > 1{
+    n, _ := strconv.Atoi(os.Args[1])
+    N = n
+  } else{
+    N = 10
+  }
+
+  if len(os.Args) > 2{
+    p_flag = true
+  }
+
+  // initialize w
 	w := make([][]float64, N)
 	for i := 0; i < N; i++ {
 		w[i] = make([]float64, N)
 		for j := 0; j < N; j++ {
 			if i == j {
 				w[i][j] = float64(i)
-			}
+			} else {
+        w[i][j] = float64(i) - math.Abs(float64(i-j))
+      }
 		}
 	}
 
@@ -32,19 +51,25 @@ func main() {
 	xa_bar = make([]float64, N)
 	xi_bar = make([]float64, N)
 
-	xab_aux = make([][]float64, n_threads)
-	xib_aux = make([][]float64, n_threads)
-	for i := 0; i < N; i++{
-		xab_aux[i] = make([]float64, N)
-		xib_aux[i] = make([]float64, N)
-	}
+  xab_aux = make([][]float64, N)
+  xib_aux = make([][]float64, N)
+  for i := 0; i < N; i++{
+    xab_aux[i] = make([]float64, N)
+    xib_aux[i] = make([]float64, N)
+  }
 
-	admm_serial()
-	
+  if p_flag {
+	  admm_parallel()
+	} else {
+    admm_serial()
+  }
+
+  obj := 0.0
 	for i := 0; i < N; i++{
-		fmt.Printf("%f %f\n", xa_bar[i], xi_bar[i])
+		obj += xa_bar[i] + xi_bar[i]
 	}
-	fmt.Println("done")
+  target_obj := float64(N*(N-1.0)/2.0)
+	fmt.Printf("Objective : %f, Target: %f\n", obj,target_obj)
 }
 
 func average(){
@@ -79,10 +104,34 @@ func dual_update(low int, high int){
   }
 }
 
+func admm_parallel_help(i int, ch chan int){
+  for j := 0; j < N; j++ {
+    blk[i].Yi[j] += rho * (blk[i].Xi[j] - xi_bar[j])
+    blk[i].Ya[j] += rho * (blk[i].Xa[j] - xa_bar[j])
+    xab_aux[i][j] = xa_bar[j] - (1.0 + blk[i].Ya[j])/rho
+    xib_aux[i][j] = xi_bar[j] - (1.0 + blk[i].Yi[j])/rho
+  }
+  blk[i].Project(xab_aux[i], xib_aux[i])
+  ch <- 1
+}
+
+func admm_parallel(){
+  ch := make(chan int, N)
+  for t := 0; t < 1000; t++{
+    for i := 0; i < N; i++{
+      go admm_parallel_help(i, ch)
+    }
+    for i := 0; i < N; i++ {
+      <- ch
+    }
+    average();
+  }
+}
+
 func admm_serial(){
   for t := 0; t < 1000; t++{
-    dual_update(0, N);
-    project_all(0, N, 0); 
+      dual_update(0, N);
+      project_all(0, N, 0); 
     average();
   }
 }
